@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Đọc Excel Sinh Viên</title>
+
+    <!-- Thư viện đọc Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial;
+            padding: 20px;
+        }
+
+        table {
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        td,
+        th {
+            border: 1px solid #ccc;
+            padding: 8px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2>Upload file Excel danh sách sinh viên</h2>
+    <input type="file" id="fileInput" accept=".xlsx, .xls" />
+
+    <table id="resultTable">
+        <thead>
+            <tr>
+                <th>Họ tên</th>
+                <th>MSV</th>
+                <th>Email</th>
+                <th>Khoa</th>
+                <th>Khóa</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        // HÀM BỎ DẤU TIẾNG VIỆT 
+        function removeVietnameseTones(str) {
+            return str
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/đ/g, "d")
+                .replace(/Đ/g, "D")
+                .replace(/[^a-zA-Z0-9 ]/g, "")
+                .trim();
+        }
+        // Mapping mã khoa
+        const facultyMap = {
+            "404": "CNTT&KTS",
+            "401": "Quản trị kinh doanh",
+            "402": "Kinh tế",
+            "403": "Tài chính",
+            "405": "Ngân hàng"
+        };
+
+        // Class Student
+        class Student {
+            constructor(fullName, studentId) {
+                this.originalName = fullName.trim(); // tên gốc
+                this.studentId = studentId.trim();
+
+                this.cleanedName = "";
+                this.firstName = "";
+                this.lastName = "";
+                this.middleName = "";
+
+                this.course = "";
+                this.faculty = "";
+                this.email = "";
+
+                this.cleanName();       // bỏ (LT), (BT...), ...
+                this.parseName();       // tách tên
+                this.parseStudentId();  // xử lý MSV
+                this.generateEmail();   // tạo email
+            }
+
+            //BỎ PHẦN CHÚ THÍCH
+            cleanName() {
+                // Xóa nội dung trong ngoặc
+                this.cleanedName = this.originalName.replace(/\(.*?\)/g, "").trim();
+            }
+
+            //TÁCH TÊN
+            parseName() {
+                let noAccent = removeVietnameseTones(this.cleanedName).toLowerCase();
+                let parts = noAccent.split(/\s+/);
+
+                this.lastName = parts[0];
+                this.firstName = parts[parts.length - 1];
+                this.middleName = parts.slice(1, parts.length - 1).join(" ");
+            }
+
+            //PHÂN TÍCH MSV
+            parseStudentId() {
+                this.course = "K" + this.studentId.substring(0, 2);
+
+                let facultyCode = this.studentId.substring(3, 6);
+
+                this.faculty = facultyMap[facultyCode] || "Không xác định";
+            }
+
+            //TẠO EMAIL
+            generateEmail() {
+                let first = this.firstName;
+
+                let lastInitial = this.lastName ? this.lastName[0] : "";
+
+                let middleInitial = this.middleName
+                    ? this.middleName.split(" ").map(w => w[0]).join("")
+                    : "";
+
+                let idLower = this.studentId.toLowerCase();
+
+                this.email = `${first}${lastInitial}${middleInitial}.${idLower}@hvnh.edu.vn`;
+            }
+
+            //HIỂN THỊ
+            toString() {
+                return `
+            Tên gốc: ${this.originalName}
+            Tên xử lý: ${this.cleanedName}
+            MSV: ${this.studentId}
+            Email: ${this.email}
+            Khoa: ${this.faculty}
+            Khóa: ${this.course}
+`;
+            }
+        }
+
+        // Đọc file Excel
+        document.getElementById("fileInput").addEventListener("change", function (e) {
+            const file = e.target.files[0];
+
+            if (!file) return;
+
+            const reader = new FileReader();
+
+            reader.onload = function (event) {
+                const data = new Uint8Array(event.target.result);
+
+                const workbook = XLSX.read(data, { type: "array" });
+
+                const sheetName = workbook.SheetNames[0];
+                const sheet = workbook.Sheets[sheetName];
+
+                const jsonData = XLSX.utils.sheet_to_json(sheet);
+
+                console.log(jsonData); // 👉 Xem dữ liệu đọc được
+
+                // Gọi hàm xử lý sinh viên ở đây
+                displayStudents(jsonData);
+            };
+
+            reader.readAsArrayBuffer(file);
+        });
+
+        // Hiển thị bảng
+        function displayStudents(data) {
+            const tbody = document.querySelector("#resultTable tbody");
+            tbody.innerHTML = "";
+
+            data.forEach(row => {
+                if (!row["Họ tên"] || !row["Mã SV"]) return;
+                const student = new Student(row["Họ tên"], row["Mã SV"]);
+                const tr = document.createElement("tr");
+
+                tr.innerHTML = `
+            <td>${student.originalName}</td>
+            <td>${student.studentId}</td>
+            <td>${student.email}</td>
+            <td>${student.faculty}</td>
+            <td>${student.course}</td>
+        `;
+
+                tbody.appendChild(tr);
+            });
+        }
+    </script>
+
+</body>
+
+</html>
